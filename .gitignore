@@ -1,0 +1,59 @@
+# Environment variables
+.env
+.env.local
+
+# Ruby/Bundler
+.bundle/
+vendor/bundle/
+Gemfile.lock
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Logs
+*.log
+log/*.log
+*.gz
+
+# Temporary files
+tmp/
+*.tmp
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE/Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.iml
+
+# Coverage reports
+coverage/
+coverage.out
+
+# Build artifacts
+dist/
+bin/livekit-adapter
+debug*
+
+# Test artifacts
+*.h264
+*.ivf
+*.ogg
+*.mka
+*.opus
+*.pcm
+*.wav
+*.mp4
