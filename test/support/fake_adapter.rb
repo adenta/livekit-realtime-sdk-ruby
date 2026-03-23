@@ -56,6 +56,8 @@ class FakeAdapter
 
   public
   def route(req, res)
+    return json(res, 200, status: "ok") if req.request_method == "GET" && req.path == "/healthz"
+
     return unauthorized(res) unless authorized?(req)
 
     case [req.request_method, req.path]

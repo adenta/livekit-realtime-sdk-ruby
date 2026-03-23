@@ -16,6 +16,7 @@ Gem::Specification.new do |spec|
 
   spec.metadata["source_code_uri"] = spec.homepage
 
-  spec.files = Dir.glob("{lib,test}/**/*") + %w[README.md livekit-realtime-sdk.gemspec]
+  spec.files = Dir.glob("{lib,test,go,bin}/**/*").select { |path| File.file?(path) } +
+    %w[README.md livekit-realtime-sdk.gemspec]
   spec.require_paths = ["lib"]
 end

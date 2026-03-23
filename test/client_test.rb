@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "socket"
+
 require_relative "test_helper"
 
 class ClientTest < Minitest::Test
@@ -49,5 +51,41 @@ class ClientTest < Minitest::Test
     end
 
     assert_equal 404, error.status
+  end
+
+  def test_external_mode_does_not_autostart_when_unreachable
+    addr = "127.0.0.1:#{next_open_port}"
+    client = LiveKitRealtime::Client.new(
+      base_url: "http://#{addr}",
+      shared_secret: @secret,
+      adapter_mode: :external,
+      open_timeout: 0.2,
+      read_timeout: 0.2
+    )
+
+    assert_raises(LiveKitRealtime::ConnectionError) do
+      client.create_session(room: "room-1", identity: "bot")
+    end
+  end
+
+  def test_managed_mode_invokes_supervisor_before_request
+    calls = 0
+    supervisor = Object.new
+    supervisor.define_singleton_method(:ensure_ready!) { calls += 1 }
+
+    client = LiveKitRealtime::Client.new(base_url: @adapter.base_url, shared_secret: @secret, adapter_mode: :managed)
+    client.instance_variable_set(:@adapter_supervisor, supervisor)
+
+    client.create_session(room: "room-1", identity: "bot")
+    assert_equal 1, calls
+  end
+
+  private
+
+  def next_open_port
+    server = TCPServer.new("127.0.0.1", 0)
+    server.addr[1]
+  ensure
+    server&.close
   end
 end

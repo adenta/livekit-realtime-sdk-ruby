@@ -4,7 +4,6 @@ require "securerandom"
 require "time"
 
 require_relative "test_helper"
-require_relative "support/adapter_process"
 
 class LiveKitIntegrationTest < Minitest::Test
   REQUIRED_ENV = %w[
@@ -29,25 +28,20 @@ class LiveKitIntegrationTest < Minitest::Test
 
     log "starting integration setup"
 
-    @adapter = AdapterProcess.new(
-      env: {
-        "LIVEKIT_WS_URL" => livekit_url,
-        "LIVEKIT_API_KEY" => ENV.fetch("LIVEKIT_API_KEY"),
-        "LIVEKIT_API_SECRET" => ENV.fetch("LIVEKIT_API_SECRET"),
-        "SHARED_SECRET" => ENV.fetch("SHARED_SECRET")
-      },
-      stream_logs: ENV["LIVEKIT_INTEGRATION_ADAPTER_LOGS"] == "1"
-    )
-    log "starting adapter process"
-    @adapter.start!
-    log "adapter ready at #{@adapter.base_url}"
+    base_url = ENV["LIVEKIT_REALTIME_ADAPTER_URL"] || ENV["ADAPTER_ADDR"] || "127.0.0.1:8787"
+    base_url = "http://#{base_url}" unless base_url.start_with?("http://", "https://")
+    @adapter_log_path = File.expand_path("../tmp/adapter_integration.log", __dir__)
 
     @client = LiveKitRealtime::Client.new(
-      base_url: @adapter.base_url,
+      base_url: base_url,
       shared_secret: ENV.fetch("SHARED_SECRET"),
+      adapter_mode: :managed,
+      adapter_start_timeout: 30,
+      adapter_log_path: @adapter_log_path,
       open_timeout: 5,
       read_timeout: 120
     )
+    log "managed adapter target #{base_url}"
 
     @room = "#{room_prefix}_#{SecureRandom.hex(4)}"
     log "test room #{@room}"
@@ -58,8 +52,6 @@ class LiveKitIntegrationTest < Minitest::Test
     @sender&.close
     log "teardown: closing receiver session" if @receiver
     @receiver&.close
-    log "teardown: stopping adapter process"
-    @adapter&.stop!
     log "teardown complete"
   end
 
@@ -106,7 +98,7 @@ class LiveKitIntegrationTest < Minitest::Test
       end
     end
 
-    refute_nil received_event, "timed out waiting for data event (adapter logs: #{@adapter.log_path})"
+    refute_nil received_event, "timed out waiting for data event (adapter logs: #{@adapter_log_path})"
     assert_equal sender_identity, received_event.sender_identity
     assert_equal expected_topic, received_event.topic
     assert_equal expected_payload, received_event.payload

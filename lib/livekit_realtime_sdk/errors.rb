@@ -4,6 +4,7 @@ module LiveKitRealtime
   class Error < StandardError; end
   class TimeoutError < Error; end
   class ConnectionError < Error; end
+  class AdapterBootstrapError < Error; end
 
   class HTTPError < Error
     attr_reader :status

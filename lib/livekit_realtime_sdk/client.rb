@@ -4,6 +4,7 @@ require "json"
 require "net/http"
 require "uri"
 
+require_relative "adapter_supervisor"
 require_relative "errors"
 require_relative "session"
 
@@ -14,14 +15,32 @@ module LiveKitRealtime
 
     attr_reader :base_url
 
-    def initialize(base_url: nil, shared_secret: nil, open_timeout: DEFAULT_OPEN_TIMEOUT, read_timeout: DEFAULT_READ_TIMEOUT)
+    def initialize(
+      base_url: nil,
+      shared_secret: nil,
+      open_timeout: DEFAULT_OPEN_TIMEOUT,
+      read_timeout: DEFAULT_READ_TIMEOUT,
+      adapter_mode: nil,
+      adapter_start_timeout: nil,
+      adapter_bin_path: nil,
+      adapter_log_path: nil
+    )
       @base_url = normalize_base_url(base_url || ENV["LIVEKIT_REALTIME_ADAPTER_URL"] || ENV["ADAPTER_ADDR"] || "127.0.0.1:8787")
       @shared_secret = shared_secret || ENV["SHARED_SECRET"]
       @open_timeout = open_timeout
       @read_timeout = read_timeout
+      @adapter_supervisor = AdapterSupervisor.new(
+        base_url: @base_url,
+        adapter_mode: adapter_mode,
+        start_timeout: adapter_start_timeout,
+        adapter_bin_path: adapter_bin_path || ENV["LIVEKIT_REALTIME_ADAPTER_BIN"],
+        adapter_log_path: adapter_log_path || ENV["LIVEKIT_REALTIME_ADAPTER_LOG_PATH"]
+      )
     end
 
     def create_session(room:, identity:, name: nil)
+      ensure_adapter_ready!
+
       payload = { room: room, identity: identity }
       payload[:name] = name if name
 
@@ -30,6 +49,8 @@ module LiveKitRealtime
     end
 
     def publish_data(session_id:, payload:, topic: nil, reliable: true, destination_identities: [])
+      ensure_adapter_ready!
+
       json_request(
         :post,
         "/v1/sessions/#{session_id}/data",
@@ -45,12 +66,19 @@ module LiveKitRealtime
     end
 
     def close_session(session_id:)
+      ensure_adapter_ready!
+
       json_request(:delete, "/v1/sessions/#{session_id}", expected_statuses: [200])
       true
     end
 
+    # TODO(midwest-dads): This stream path uses blocking Net::HTTP and a dedicated Thread.
+    # Refactor to an async/fiber-compatible transport (Socketry-style) so long-lived
+    # event streams do not rely on per-session thread management.
     def stream_events(session_id:, &on_event)
       raise ArgumentError, "block required" unless on_event
+
+      ensure_adapter_ready!
 
       Thread.new do
         run_event_stream(session_id: session_id, &on_event)
@@ -60,6 +88,10 @@ module LiveKitRealtime
     end
 
     private
+
+    def ensure_adapter_ready!
+      @adapter_supervisor.ensure_ready!
+    end
 
     def run_event_stream(session_id:, &on_event)
       uri = uri_for("/v1/sessions/#{session_id}/events")
